@@ -1,0 +1,414 @@
+{
+  "meta": {
+    "generated_at": "2026-07-09T00:53:29.406793",
+    "data_file": "concrete_data.csv",
+    "competition_type": "全国大学生数学建模竞赛",
+    "problem_title": "基于多元回归的混凝土抗压强度预测研究",
+    "problem_type": "regression",
+    "target_variable": "strength"
+  },
+  "data_overview": {
+    "total_samples": 1030,
+    "total_features": 9,
+    "numeric_features": 9,
+    "categorical_features": 0,
+    "columns": [
+      "cement",
+      "slag",
+      "ash",
+      "water",
+      "superplastic",
+      "coarseagg",
+      "fineagg",
+      "age",
+      "strength"
+    ],
+    "dtypes": {
+      "cement": "float64",
+      "slag": "float64",
+      "ash": "float64",
+      "water": "float64",
+      "superplastic": "float64",
+      "coarseagg": "float64",
+      "fineagg": "float64",
+      "age": "int64",
+      "strength": "float64"
+    }
+  },
+  "descriptive_stats": {
+    "cement": {
+      "mean": 281.167864,
+      "std": 104.506364,
+      "min": 102.0,
+      "25%": 192.375,
+      "50%": 272.9,
+      "75%": 350.0,
+      "max": 540.0
+    },
+    "slag": {
+      "mean": 73.895825,
+      "std": 86.279342,
+      "min": 0.0,
+      "25%": 0.0,
+      "50%": 22.0,
+      "75%": 142.95,
+      "max": 359.4
+    },
+    "ash": {
+      "mean": 54.18835,
+      "std": 63.997004,
+      "min": 0.0,
+      "25%": 0.0,
+      "50%": 0.0,
+      "75%": 118.3,
+      "max": 200.1
+    },
+    "water": {
+      "mean": 181.567282,
+      "std": 21.354219,
+      "min": 121.8,
+      "25%": 164.9,
+      "50%": 185.0,
+      "75%": 192.0,
+      "max": 247.0
+    },
+    "superplastic": {
+      "mean": 6.20466,
+      "std": 5.973841,
+      "min": 0.0,
+      "25%": 0.0,
+      "50%": 6.4,
+      "75%": 10.2,
+      "max": 32.2
+    },
+    "coarseagg": {
+      "mean": 972.918932,
+      "std": 77.753954,
+      "min": 801.0,
+      "25%": 932.0,
+      "50%": 968.0,
+      "75%": 1029.4,
+      "max": 1145.0
+    },
+    "fineagg": {
+      "mean": 773.580485,
+      "std": 80.17598,
+      "min": 594.0,
+      "25%": 730.95,
+      "50%": 779.5,
+      "75%": 824.0,
+      "max": 992.6
+    },
+    "age": {
+      "mean": 45.662136,
+      "std": 63.169912,
+      "min": 1.0,
+      "25%": 7.0,
+      "50%": 28.0,
+      "75%": 56.0,
+      "max": 365.0
+    },
+    "strength": {
+      "mean": 35.817961,
+      "std": 16.705742,
+      "min": 2.33,
+      "25%": 23.71,
+      "50%": 34.445,
+      "75%": 46.135,
+      "max": 82.6
+    }
+  },
+  "normality_tests": {
+    "cement": {
+      "test": "Shapiro-Wilk",
+      "statistic": 0.958961,
+      "p_value": 0.0,
+      "is_normal": false
+    },
+    "slag": {
+      "test": "Shapiro-Wilk",
+      "statistic": 0.812409,
+      "p_value": 0.0,
+      "is_normal": false
+    },
+    "ash": {
+      "test": "Shapiro-Wilk",
+      "statistic": 0.761999,
+      "p_value": 0.0,
+      "is_normal": false
+    },
+    "water": {
+      "test": "Shapiro-Wilk",
+      "statistic": 0.98039,
+      "p_value": 0.0,
+      "is_normal": false
+    },
+    "superplastic": {
+      "test": "Shapiro-Wilk",
+      "statistic": 0.866031,
+      "p_value": 0.0,
+      "is_normal": false
+    },
+    "coarseagg": {
+      "test": "Shapiro-Wilk",
+      "statistic": 0.982453,
+      "p_value": 0.0,
+      "is_normal": false
+    },
+    "fineagg": {
+      "test": "Shapiro-Wilk",
+      "statistic": 0.980671,
+      "p_value": 0.0,
+      "is_normal": false
+    },
+    "age": {
+      "test": "Shapiro-Wilk",
+      "statistic": 0.590706,
+      "p_value": 0.0,
+      "is_normal": false
+    },
+    "strength": {
+      "test": "Shapiro-Wilk",
+      "statistic": 0.979791,
+      "p_value": 0.0,
+      "is_normal": false
+    }
+  },
+  "correlation": {
+    "strong_pairs": [
+      {
+        "var1": "water",
+        "var2": "superplastic",
+        "correlation": -0.6575
+      }
+    ],
+    "matrix_snippet": {
+      "cement": {
+        "cement": 1.0,
+        "slag": -0.2752,
+        "ash": -0.3975,
+        "water": -0.0816,
+        "superplastic": 0.0924,
+        "coarseagg": -0.1093,
+        "fineagg": -0.2227,
+        "age": 0.0819
+      },
+      "slag": {
+        "cement": -0.2752,
+        "slag": 1.0,
+        "ash": -0.3236,
+        "water": 0.1073,
+        "superplastic": 0.0433,
+        "coarseagg": -0.284,
+        "fineagg": -0.2816,
+        "age": -0.0442
+      },
+      "ash": {
+        "cement": -0.3975,
+        "slag": -0.3236,
+        "ash": 1.0,
+        "water": -0.257,
+        "superplastic": 0.3775,
+        "coarseagg": -0.01,
+        "fineagg": 0.0791,
+        "age": -0.1544
+      },
+      "water": {
+        "cement": -0.0816,
+        "slag": 0.1073,
+        "ash": -0.257,
+        "water": 1.0,
+        "superplastic": -0.6575,
+        "coarseagg": -0.1823,
+        "fineagg": -0.4507,
+        "age": 0.2776
+      },
+      "superplastic": {
+        "cement": 0.0924,
+        "slag": 0.0433,
+        "ash": 0.3775,
+        "water": -0.6575,
+        "superplastic": 1.0,
+        "coarseagg": -0.266,
+        "fineagg": 0.2227,
+        "age": -0.1927
+      },
+      "coarseagg": {
+        "cement": -0.1093,
+        "slag": -0.284,
+        "ash": -0.01,
+        "water": -0.1823,
+        "superplastic": -0.266,
+        "coarseagg": 1.0,
+        "fineagg": -0.1785,
+        "age": -0.003
+      },
+      "fineagg": {
+        "cement": -0.2227,
+        "slag": -0.2816,
+        "ash": 0.0791,
+        "water": -0.4507,
+        "superplastic": 0.2227,
+        "coarseagg": -0.1785,
+        "fineagg": 1.0,
+        "age": -0.1561
+      },
+      "age": {
+        "cement": 0.0819,
+        "slag": -0.0442,
+        "ash": -0.1544,
+        "water": 0.2776,
+        "superplastic": -0.1927,
+        "coarseagg": -0.003,
+        "fineagg": -0.1561,
+        "age": 1.0
+      }
+    }
+  },
+  "modeling": {
+    "problem_type": "regression",
+    "feature_importance": [
+      {
+        "feature": "age",
+        "importance": 0.355123
+      },
+      {
+        "feature": "cement",
+        "importance": 0.319499
+      },
+      {
+        "feature": "water",
+        "importance": 0.09172
+      },
+      {
+        "feature": "slag",
+        "importance": 0.077211
+      },
+      {
+        "feature": "superplastic",
+        "importance": 0.073669
+      },
+      {
+        "feature": "fineagg",
+        "importance": 0.037035
+      },
+      {
+        "feature": "coarseagg",
+        "importance": 0.026027
+      },
+      {
+        "feature": "ash",
+        "importance": 0.019715
+      }
+    ],
+    "models": {
+      "LinearRegression": {
+        "R2": 0.497953,
+        "RMSE": 10.518017,
+        "MAE": 8.487891,
+        "CV_R2_mean": 0.603097,
+        "CV_R2_std": 0.059963
+      },
+      "Ridge": {
+        "R2": 0.497736,
+        "RMSE": 10.52029,
+        "MAE": 8.494343,
+        "CV_R2_mean": 0.603236,
+        "CV_R2_std": 0.059011
+      },
+      "Lasso": {
+        "R2": 0.497707,
+        "RMSE": 10.520591,
+        "MAE": 8.495982,
+        "CV_R2_mean": 0.603094,
+        "CV_R2_std": 0.058946
+      },
+      "RandomForest": {
+        "R2": 0.87443,
+        "RMSE": 5.26023,
+        "MAE": 3.887972,
+        "CV_R2_mean": 0.893774,
+        "CV_R2_std": 0.017213
+      },
+      "GradientBoosting": {
+        "R2": 0.901022,
+        "RMSE": 4.670154,
+        "MAE": 3.387762,
+        "CV_R2_mean": 0.911893,
+        "CV_R2_std": 0.012437
+      }
+    },
+    "best_model": "GradientBoosting",
+    "best_r2": 0.901022,
+    "feature_columns": [
+      "cement",
+      "slag",
+      "ash",
+      "water",
+      "superplastic",
+      "coarseagg",
+      "fineagg",
+      "age"
+    ],
+    "sample_size": {
+      "train": 807,
+      "test": 202
+    },
+    "figures": [
+      {
+        "path": "output/output_concrete_data/regression_LinearRegression_diagnostics.png",
+        "caption": "LinearRegression 回归诊断图"
+      },
+      {
+        "path": "output/output_concrete_data/regression_RandomForest_diagnostics.png",
+        "caption": "RandomForest 回归诊断图"
+      },
+      {
+        "path": "output/output_concrete_data/regression_GradientBoosting_diagnostics.png",
+        "caption": "GradientBoosting 回归诊断图"
+      },
+      {
+        "path": "output/output_concrete_data/feature_importance.png",
+        "caption": "随机森林特征重要性排序"
+      }
+    ]
+  },
+  "all_figures": [
+    {
+      "path": "output/output_concrete_data/correlation_heatmap.png",
+      "caption": "变量相关性热力图"
+    },
+    {
+      "path": "output/output_concrete_data/target_distribution.png",
+      "caption": "目标变量 strength 分布图"
+    },
+    {
+      "path": "output/output_concrete_data/regression_LinearRegression_diagnostics.png",
+      "caption": "LinearRegression 回归诊断图"
+    },
+    {
+      "path": "output/output_concrete_data/regression_RandomForest_diagnostics.png",
+      "caption": "RandomForest 回归诊断图"
+    },
+    {
+      "path": "output/output_concrete_data/regression_GradientBoosting_diagnostics.png",
+      "caption": "GradientBoosting 回归诊断图"
+    },
+    {
+      "path": "output/output_concrete_data/feature_importance.png",
+      "caption": "随机森林特征重要性排序"
+    }
+  ],
+  "preprocessing": {
+    "missing_values": {},
+    "original_shape": [
+      1030,
+      9
+    ],
+    "cleaned_shape": [
+      1030,
+      9
+    ],
+    "removed_cols": 0
+  }
+}
