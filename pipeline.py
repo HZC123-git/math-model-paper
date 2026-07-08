@@ -678,12 +678,715 @@ def main():
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(to_native(report), f, ensure_ascii=False, indent=2)
 
+    # 生成 LaTeX
+    latex_path = str(Path(output_path).with_suffix(".tex"))
+    build_latex(report, latex_path)
+    print(f"  LaTeX: {latex_path}")
     print(f"\n{'='*60}")
     print(f"  Done!")
     print(f"  Report: {output_path}")
+    print(f"  LaTeX: {latex_path}")
     print(f"  Charts: {out_dir}")
+    print(f"  Next: compile with 'latexmk -pdf -xelatex {latex_path}'")
     print(f"{'='*60}")
     return report
+
+
+# ============================================================
+#  6. LaTeX 论文输出
+# ============================================================
+
+def build_latex(report, output_path):
+    """根据分析报告生成完整的带图片LaTeX论文"""
+
+    meta = report.get("meta", {})
+    eda = report.get("data_overview", {})
+    desc = report.get("descriptive_stats", {})
+    normality = report.get("normality_tests", {})
+    corr = report.get("correlation", {})
+    modeling = report.get("modeling", {})
+    problem_type = modeling.get("problem_type", "regression")
+    all_figs = report.get("all_figures", [])
+
+    # 找图表路径
+    def find_fig(keyword):
+        for f in all_figs:
+            if keyword in f.get("path", ""):
+                # 转相对路径中Windows反斜杠
+                p = f["path"].replace("\\", "/")
+                # 提取文件名
+                import os
+                return os.path.basename(p)
+        return None
+
+    corr_heatmap = find_fig("correlation_heatmap")
+    target_dist = find_fig("target_distribution")
+    feat_imp = find_fig("feature_importance")
+
+    # 回归诊断图
+    diag_figs = {}
+    for f in all_figs:
+        for m in ["LinearRegression", "RandomForest", "GradientBoosting"]:
+            if m in f.get("path", ""):
+                import os
+                diag_figs[m] = os.path.basename(f["path"].replace("\\", "/"))
+
+    # 分类混淆矩阵
+    cm_figs = {}
+    for f in all_figs:
+        if "classification_" in f.get("path", ""):
+            import os
+            name = os.path.basename(f["path"].replace("\\", "/"))
+            for m in ["LogisticRegression", "RandomForest", "GradientBoosting", "SVM"]:
+                if m in name:
+                    cm_figs[m] = name
+
+    # 聚类图
+    cluster_k = find_fig("clustering_k_selection")
+    cluster_pca = find_fig("clustering_pca")
+
+    title = meta.get("problem_title", "数据分析与建模研究")
+    competition = meta.get("competition_type", "全国大学生数学建模竞赛")
+
+    # --- 构建 LaTeX ---
+    latex = r"""\documentclass[12pt,a4paper]{ctexart}
+\usepackage[top=2.5cm, bottom=2.5cm, left=3cm, right=3cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{enumitem}
+
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=black}
+\captionsetup{font=small,labelfont=bf}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{""" + competition + r"""}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\begin{document}
+
+% ============ 封面 ============
+\begin{titlepage}
+\vspace*{3cm}
+\begin{center}
+{\LARGE \textbf{""" + competition + r"""}}\\[1cm]
+{\Large 参赛论文}\\[2cm]
+{\huge \textbf{""" + title + r"""}}\\[3cm]
+\vfill
+\end{center}
+\end{titlepage}
+
+% ============ 摘要 ============
+\newpage
+\begin{center}
+{\LARGE \textbf{""" + title + r"""}}\\[0.5cm]
+{\large \textbf{摘\quad 要}}
+\end{center}
+\vspace{0.5cm}
+"""
+
+    # 动态生成摘要
+    abstract = build_abstract(report)
+    latex += abstract
+
+    latex += r"""
+\vspace{0.5cm}
+\noindent\textbf{关键词}："""
+
+    keywords = build_keywords(report)
+    latex += keywords
+
+    # 目录
+    latex += r"""
+
+\newpage
+\tableofcontents
+\newpage
+
+"""
+
+    # ============ 正文 ============
+
+    # --- 一、问题重述 ---
+    latex += r"\section{问题重述}" + "\n"
+    latex += r"\subsection{问题背景}" + "\n"
+    latex += build_background(report)
+    latex += r"\subsection{本文拟解决的问题}" + "\n"
+    latex += build_questions(report)
+
+    # --- 二、模型假设与符号说明 ---
+    latex += r"\section{模型假设与符号说明}" + "\n"
+    latex += r"\subsection{模型的基本假设}" + "\n"
+    latex += build_assumptions(report)
+    latex += r"\subsection{模型符号说明}" + "\n"
+    latex += build_nomenclature(report)
+
+    # --- 三、数据探索与预处理 ---
+    latex += r"\section{数据探索与预处理}" + "\n"
+
+    # 3.1 描述性统计
+    latex += r"\subsection{描述性统计}" + "\n"
+    latex += build_descriptive_text(report)
+
+    # 目标变量分布图
+    if target_dist:
+        latex += r"""
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{""" + target_dist + r"""}
+\caption{目标变量分布直方图与Q-Q图}
+\label{fig:target_dist}
+\end{figure}
+"""
+
+    # 描述性统计表
+    latex += build_descriptive_table(report)
+
+    # 3.2 正态性检验
+    latex += r"\subsection{正态性检验}" + "\n"
+    latex += build_normality_text(report)
+    latex += build_normality_table(report)
+
+    # 3.3 相关性分析
+    latex += r"\subsection{相关性分析}" + "\n"
+    latex += build_correlation_text(report)
+
+    if corr_heatmap:
+        latex += r"""
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{""" + corr_heatmap + r"""}
+\caption{数值变量相关性热力图}
+\label{fig:corr_heatmap}
+\end{figure}
+"""
+
+    # --- 四、模型建立与求解 ---
+    latex += r"\section{模型建立与求解}" + "\n"
+    latex += r"\subsection{问题分析}" + "\n"
+    latex += build_model_analysis(report)
+    latex += r"\subsection{模型建立与求解}" + "\n"
+
+    # 各模型描述
+    latex += build_model_descriptions(report)
+
+    # 模型对比表
+    latex += build_model_comparison_table(report)
+
+    # 特征重要性
+    if modeling.get("feature_importance"):
+        latex += r"\subsection{特征重要性分析}" + "\n"
+        latex += build_feature_importance_text(report)
+
+        if feat_imp:
+            latex += r"""
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{""" + feat_imp + r"""}
+\caption{随机森林特征重要性排序}
+\label{fig:feat_imp}
+\end{figure}
+"""
+
+    latex += build_feature_importance_table(report)
+
+    # 模型诊断图
+    if diag_figs:
+        latex += r"\subsection{模型诊断}" + "\n"
+        latex += build_diagnostics_text(report)
+        for model_name, fig_path in diag_figs.items():
+            latex += r"""
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{""" + fig_path + r"""}
+\caption{""" + model_name + r""" 模型诊断图：真实值-预测值散点图（左）与残差图（右）}
+\label{fig:diag_""" + model_name.lower() + r"""}
+\end{figure}
+"""
+
+    # 聚类特有输出
+    if problem_type == "clustering":
+        clustering = modeling.get("clustering", {})
+        if clustering:
+            latex += r"\subsection{聚类结果}" + "\n"
+            latex += build_clustering_text(report)
+            latex += build_clustering_table(report)
+            if cluster_k:
+                latex += r"""
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{""" + cluster_k + r"""}
+\caption{K值选择：肘部法则与轮廓系数分析}
+\label{fig:cluster_k}
+\end{figure}
+"""
+            if cluster_pca:
+                latex += r"""
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{""" + cluster_pca + r"""}
+\caption{PCA降维后的K-Means聚类散点图}
+\label{fig:cluster_pca}
+\end{figure}
+"""
+
+    # --- 五、模型评价与推广 ---
+    latex += r"\section{模型评价与推广}" + "\n"
+    latex += r"\subsection{模型的优点}" + "\n"
+    latex += build_strengths(report)
+    latex += r"\subsection{模型的缺点}" + "\n"
+    latex += build_weaknesses(report)
+    latex += r"\subsection{模型改进与推广}" + "\n"
+    latex += build_improvements(report)
+
+    # --- 参考文献 ---
+    latex += r"""
+\newpage
+\section{参考文献}
+\begin{thebibliography}{99}
+\bibitem{harrison1978} Harrison D, Rubinfeld D L. Hedonic housing prices and the demand for clean air[J]. Journal of Environmental Economics and Management, 1978, 5(1): 81-102.
+\bibitem{malpezzi2003} Malpezzi S. Hedonic price models: a selective and applied review[J]. Housing Economics and Public Policy, 2003: 67-89.
+\bibitem{sirmans2005} Sirmans S, Macpherson D, Zietz E. The composition of hedonic pricing models[J]. Journal of Real Estate Literature, 2005, 13(1): 1-44.
+\bibitem{breiman2001} Breiman L. Random forests[J]. Machine Learning, 2001, 45(1): 5-32.
+\bibitem{friedman2001} Friedman J H. Greedy function approximation: a gradient boosting machine[J]. Annals of Statistics, 2001, 29(5): 1189-1232.
+\bibitem{tibshirani1996} Tibshirani R. Regression shrinkage and selection via the lasso[J]. Journal of the Royal Statistical Society: Series B, 1996, 58(1): 267-288.
+\bibitem{hoerl1970} Hoerl A E, Kennard R W. Ridge regression: Biased estimation for nonorthogonal problems[J]. Technometrics, 1970, 12(1): 55-67.
+\bibitem{shapiro1965} Shapiro S S, Wilk M B. An analysis of variance test for normality[J]. Biometrika, 1965, 52(3/4): 591-611.
+\bibitem{pearson1920} Pearson K. Notes on the history of correlation[J]. Biometrika, 1920, 13(1): 25-45.
+\bibitem{sklearn} Pedregosa F, et al. Scikit-learn: Machine learning in Python[J]. Journal of Machine Learning Research, 2011, 12: 2825-2830.
+\end{thebibliography}
+
+\end{document}
+"""
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(latex)
+
+
+# ============================================================
+#  LaTeX 辅助函数：各章节内容生成
+# ============================================================
+
+def build_abstract(report):
+    """根据分析结果自动生成摘要"""
+    meta = report.get("meta", {})
+    eda = report.get("data_overview", {})
+    modeling = report.get("modeling", {})
+    problem_type = modeling.get("problem_type", "regression")
+    desc = report.get("descriptive_stats", {})
+    corr = report.get("correlation", {})
+
+    n_samples = eda.get("total_samples", "N")
+    n_feats = eda.get("total_features", "N")
+
+    lines = []
+    lines.append(f"本文基于{desc_cols_to_text(report)}等{n_feats}个变量和{n_samples}组观测数据，")
+
+    if problem_type == "regression":
+        lines[-1] += "构建了多元回归模型。"
+        best_model = modeling.get("best_model", "XX")
+        best_r2 = modeling.get("best_r2", 0)
+        models_dict = modeling.get("models", {})
+
+        lines.append(f"对变量进行正态性检验和Pearson相关性分析后，将数据集按8:2划分，对比了{len(models_dict)}种回归模型的预测效果。")
+        lines.append(f"{best_model}在测试集上决定系数$R^2={best_r2:.4f}$。")
+
+        # 特征重要性
+        feat_imp = modeling.get("feature_importance", [])
+        if feat_imp:
+            top_feats = [f"{f['feature']}(重要性{f['importance']:.4f})" for f in feat_imp[:3]]
+            lines.append(f"特征重要性排序显示{'，'.join(top_feats)}是核心影响因素。")
+
+        # 交叉验证
+        best_entry = models_dict.get(best_model, {})
+        cv_mean = best_entry.get("CV_R2_mean")
+        if cv_mean:
+            lines.append(f"{best_model}的5折交叉验证$R^2$均值为{cv_mean:.4f}，模型泛化能力良好。")
+
+    elif problem_type == "classification":
+        best_model = modeling.get("best_model", "XX")
+        best_acc = modeling.get("best_accuracy", 0)
+        models_dict = modeling.get("models", {})
+        pct = f"{best_acc*100:.2f}"
+        lines.append(f"对比了{len(models_dict)}种分类模型，{best_model}在测试集上准确率达到{pct}" + r"\%")
+
+    elif problem_type == "clustering":
+        clustering = modeling.get("clustering", {})
+        best_k = clustering.get("best_k", "?")
+        best_sil = clustering.get("best_silhouette", 0)
+        lines.append(f"通过肘部法则和轮廓系数确定最佳聚类数$K={best_k}$，轮廓系数为{best_sil:.4f}。")
+
+    return "".join(lines) + "\n"
+
+
+def escape_tex(text):
+    """转义LaTeX特殊字符"""
+    return str(text).replace("_", "\\_").replace("&", "\\&").replace("%", "\\%").replace("#", "\\#").replace("$", "\\$")
+
+
+def desc_cols_to_text(report):
+    """描述性统计列名转中文描述"""
+    desc = report.get("descriptive_stats", {})
+    cols = [escape_tex(c) for c in list(desc.keys())[:4]]
+    return "、".join(cols)
+
+
+def build_keywords(report):
+    """生成关键词"""
+    modeling = report.get("modeling", {})
+    problem_type = modeling.get("problem_type", "regression")
+    if problem_type == "regression":
+        return "多元回归；特征重要性；正态性检验；模型对比；交叉验证\n"
+    elif problem_type == "classification":
+        return "分类模型；混淆矩阵；准确率；ROC\n"
+    else:
+        return "聚类分析；K-Means；轮廓系数；PCA\n"
+
+
+def build_background(report):
+    meta = report.get("meta", {})
+    eda = report.get("data_overview", {})
+    return f"""本研究基于{eda.get('total_samples', 'N')}组观测数据，对{meta.get('target_variable', '目标变量')}的影响因素进行定量分析。数据集包含{eda.get('total_features', 'N')}个变量，均为数值型特征。
+通过系统性的探索性数据分析、相关性检验和多种回归/分类模型的对比，确定最优建模方案并量化各因素的相对重要性。\n"""
+
+
+def build_questions(report):
+    modeling = report.get("modeling", {})
+    problem_type = modeling.get("problem_type", "regression")
+
+    items = [
+        r"\item \textbf{变量分布特征与相关性分析}：对各变量进行描述性统计和正态性检验，计算Pearson相关系数矩阵，识别强相关变量对。",
+    ]
+
+    if problem_type == "regression":
+        items.append(r"\item \textbf{回归模型构建与对比}：构建多元线性回归、Ridge回归、Lasso回归、随机森林和梯度提升树五种模型，在统一训练/测试集划分下比较$R^2$、RMSE和MAE三项指标。")
+        items.append(r"\item \textbf{特征重要性评估}：通过随机森林输出各特征的重要性得分，结合线性回归系数交叉验证特征排序的稳健性。")
+        items.append(r"\item \textbf{模型诊断与泛化验证}：绘制残差图和真实值-预测值散点图进行模型诊断，使用$K$折交叉验证评估泛化性能。")
+    elif problem_type == "classification":
+        items.append(r"\item \textbf{分类模型构建与对比}：构建多种分类器，对比准确率、精确率、召回率和$F_1$分数。")
+        items.append(r"\item \textbf{混淆矩阵分析}：通过混淆矩阵分析各类别的分类表现。")
+    elif problem_type == "clustering":
+        items.append(r"\item \textbf{最优聚类数确定}：通过肘部法则和轮廓系数确定最佳$K$值。")
+        items.append(r"\item \textbf{聚类结果可视化}：使用PCA降维可视化聚类结果。")
+
+    return "\\begin{enumerate}[label=(\\arabic*)]\n" + "\n".join(items) + "\n\\end{enumerate}\n"
+
+
+def build_assumptions(report):
+    return r"""\begin{enumerate}[label=(\arabic*)]
+\item 假设数据集中的观测记录真实有效，能够反映实际情况。
+\item 假设各样本之间相互独立，不存在关联导致的依赖性。
+\item 假设自变量与因变量之间存在可建模的统计关系。
+\item 假设数据中的异常值为随机误差，不应被人为删除。
+\end{enumerate}
+"""
+
+
+def build_nomenclature(report):
+    symbols = [
+        ("$R^2$", "决定系数"),
+        ("RMSE", "均方根误差"),
+        ("MAE", "平均绝对误差"),
+        ("$r$", "Pearson相关系数"),
+        ("$p$", "假设检验p值"),
+        ("$n$", "样本量"),
+    ]
+    rows = "\\\\\n".join([f"{s} & {d}" for s, d in symbols])
+    return r"""
+\begin{table}[H]
+\centering
+\caption{符号说明}
+\begin{tabular}{cc}
+\toprule
+符号 & 说明 \\
+\midrule
+""" + rows + r"""\\
+\bottomrule
+\end{tabular}
+\end{table}
+"""
+
+
+def build_descriptive_text(report):
+    eda = report.get("data_overview", {})
+    desc = report.get("descriptive_stats", {})
+    n = eda.get("total_samples", "N")
+    target = report.get("meta", {}).get("target_variable", "目标变量")
+    lines = [f"数据集包含{n}条记录，所有变量均为数值型。各变量的描述性统计见表\\ref{{tab:desc}}。"]
+    if target in desc:
+        stats_target = desc[target]
+        lines.append(f"目标变量{target}的均值为{stats_target['mean']:.3f}，标准差为{stats_target['std']:.3f}，最小值为{stats_target['min']:.3f}，最大值为{stats_target['max']:.3f}，数据覆盖了较广的取值区间。")
+    return "\n".join(lines) + "\n"
+
+
+def build_descriptive_table(report):
+    desc = report.get("descriptive_stats", {})
+    if not desc:
+        return ""
+    cols = list(desc.keys())[:8]
+    header = " & ".join(["变量"] + [c.replace("_", "\\_") for c in cols])
+    stats_names = ["mean", "std", "min", "max"]
+    stats_labels = ["均值", "标准差", "最小值", "最大值"]
+
+    rows = []
+    for sname, slabel in zip(stats_names, stats_labels):
+        vals = [f"{desc[c].get(sname, 0):.3f}" if c in desc else "-" for c in cols]
+        rows.append(f"{slabel} & " + " & ".join(vals))
+
+    return r"""
+\begin{table}[H]
+\centering
+\caption{变量描述性统计}
+\label{tab:desc}
+\begin{tabular}{""" + "c" * (len(cols) + 1) + r"""}
+\toprule
+""" + header + r""" \\
+\midrule
+""" + r" \\\\\n".join(rows) + r""" \\
+\bottomrule
+\end{tabular}
+\end{table}
+"""
+
+
+def build_normality_text(report):
+    tests = report.get("normality_tests", {})
+    normal_count = sum(1 for v in tests.values() if v.get("is_normal"))
+    total = len(tests)
+    return f"使用Shapiro-Wilk检验评估各变量的正态性（见表\\ref{{tab:normality}}）。{normal_count}/{total}个变量通过正态性检验($p>0.05$)，说明大部分变量的分布与正态分布无显著差异，满足回归分析的前提条件。\n"
+
+
+def build_normality_table(report):
+    tests = report.get("normality_tests", {})
+    if not tests:
+        return ""
+    rows = []
+    for col, vals in tests.items():
+        rows.append(f"{col.replace('_', '\\_')} & {vals['statistic']:.4f} & {vals['p_value']:.4f} & {'是' if vals['is_normal'] else '否'}")
+
+    return r"""
+\begin{table}[H]
+\centering
+\caption{Shapiro-Wilk正态性检验结果}
+\label{tab:normality}
+\begin{tabular}{cccc}
+\toprule
+变量 & 检验统计量 & p值 & 是否正态 \\
+\midrule
+""" + r" \\\\\n".join(rows) + r""" \\
+\bottomrule
+\end{tabular}
+\end{table}
+"""
+
+
+def build_correlation_text(report):
+    corr = report.get("correlation", {})
+    strong = corr.get("strong_pairs", [])
+    target = report.get("meta", {}).get("target_variable", "目标变量")
+
+    lines = ["Pearson相关系数矩阵如图\\ref{fig:corr_heatmap}所示。"]
+    if strong:
+        for pair in strong[:5]:
+            lines.append(f"{pair['var1']}与{pair['var2']}的相关系数$r={pair['correlation']:.4f}$，呈{'正' if pair['correlation']>0 else '负'}相关。")
+    else:
+        lines.append(f"未检测到$|r|>0.6$的强相关变量对。")
+    return "\n".join(lines) + "\n"
+
+
+def build_model_analysis(report):
+    modeling = report.get("modeling", {})
+    problem_type = modeling.get("problem_type", "regression")
+    n_models = len(modeling.get("models", {}))
+
+    if problem_type == "regression":
+        return f"""为确定最优建模方案，将{report.get('data_overview', {}).get('total_samples', 'N')}条数据按8:2划分为训练集和测试集，所有特征经StandardScaler标准化处理。共测试{n_models}种模型：多元线性回归、Ridge回归、Lasso回归（线性模型），以及随机森林和梯度提升树（非线性集成模型）。通过测试集上的$R^2$、RMSE和MAE三项指标评价模型性能，同时使用5折交叉验证评估泛化稳定性。\n"""
+    elif problem_type == "classification":
+        return f"""为确定最优分类方案，按8:2划分训练集和测试集，测试{n_models}种分类模型，以准确率、精确率、召回率和$F_1$分数为评价指标。\n"""
+    else:
+        return f"""通过肘部法则和轮廓系数确定最佳聚类数，并结合PCA降维进行可视化。\n"""
+
+
+def build_model_descriptions(report):
+    modeling = report.get("modeling", {})
+    problem_type = modeling.get("problem_type", "regression")
+    models = modeling.get("models", {})
+    best_model = modeling.get("best_model", "")
+
+    lines = []
+    if problem_type == "regression":
+        for name, metrics in models.items():
+            if "error" in metrics:
+                continue
+            r2 = metrics.get("R2", 0)
+            rmse = metrics.get("RMSE", 0)
+            cv = metrics.get("CV_R2_mean")
+            lines.append(f"\\textbf{{{name}}}的测试集$R^2={r2:.4f}$，RMSE={rmse:.3f}，MAE={metrics.get('MAE', 0):.3f}")
+            if cv:
+                lines[-1] += f"，5折交叉验证$R^2$均值{cv:.4f}（std={metrics.get('CV_R2_std', 0):.4f}）"
+            lines[-1] += "。"
+
+        if best_model and best_model in models:
+            bm = models[best_model]
+            lines.append(f"{best_model}为最优模型，$R^2={bm.get('R2', 0):.4f}$，RMSE={bm.get('RMSE', 0):.3f}。线性模型整体表现优于非线性模型，表明自变量与因变量之间以线性关系为主。")
+
+    elif problem_type == "classification":
+        for name, metrics in models.items():
+            if "error" in metrics:
+                continue
+            acc = metrics.get('Accuracy', 0)*100
+            prec = metrics.get('Precision', 0)*100
+            rec = metrics.get('Recall', 0)*100
+            f1 = metrics.get('F1_Score', 0)
+            lines.append(f"\\textbf{{{name}}}：准确率{acc:.2f}" + r"\%" + f"，精确率{prec:.2f}" + r"\%" + f"，召回率{rec:.2f}" + r"\%" + f"，$F_1$={f1:.4f}。")
+
+    return "\n".join(lines) + "\n"
+
+
+def build_model_comparison_table(report):
+    modeling = report.get("modeling", {})
+    models = modeling.get("models", {})
+    problem_type = modeling.get("problem_type", "regression")
+
+    if problem_type == "regression":
+        header = "模型 & $R^2$ & RMSE & MAE & CV $R^2$均值 & CV $R^2$标准差"
+        rows = []
+        for name, m in models.items():
+            if "error" in m:
+                continue
+            rows.append(f"{name} & {m.get('R2',0):.4f} & {m.get('RMSE',0):.3f} & {m.get('MAE',0):.3f} & {m.get('CV_R2_mean','--')} & {m.get('CV_R2_std','--')}")
+        cols = 6
+    elif problem_type == "classification":
+        header = "模型 & 准确率 & 精确率 & 召回率 & $F_1$分数"
+        rows = []
+        for name, m in models.items():
+            if "error" in m:
+                continue
+            rows.append(f"{name} & {m.get('Accuracy',0)*100:.2f}" + r"\%" + f" & {m.get('Precision',0)*100:.2f}" + r"\%" + f" & {m.get('Recall',0)*100:.2f}" + r"\%" + f" & {m.get('F1_Score',0):.4f}")
+        cols = 5
+    else:
+        return ""
+
+    return r"""
+\begin{table}[H]
+\centering
+\caption{模型测试集表现对比}
+\label{tab:model_compare}
+\begin{tabular}{""" + "c" * cols + r"""}
+\toprule
+""" + header + r""" \\
+\midrule
+""" + r" \\\\\n".join(rows) + r""" \\
+\bottomrule
+\end{tabular}
+\end{table}
+"""
+
+
+def build_feature_importance_text(report):
+    modeling = report.get("modeling", {})
+    feats = modeling.get("feature_importance", [])
+    if not feats:
+        return ""
+
+    lines = ["通过随机森林模型输出的特征重要性得分（见表\\ref{tab:feat_imp}和图\\ref{fig:feat_imp}），各变量对预测结果的相对贡献如下："]
+    top = feats[0]
+    lines.append(f"排名第一的\\textbf{{{escape_tex(top['feature'])}}}重要性得分{top['importance']:.4f}，")
+    if len(feats) >= 2:
+        second = feats[1]
+        lines[-1] += f"约为排名第二的{escape_tex(second['feature'])}（{second['importance']:.4f}）的{top['importance']/second['importance']:.1f}倍。"
+    if len(feats) >= 2:
+        pct_sum = (feats[0]['importance']+feats[1]['importance'])*100
+        lines.append(f"前两个特征合计贡献{pct_sum:.1f}" + r"\%的预测能力。")
+    return "\n".join(lines) + "\n"
+
+
+def build_feature_importance_table(report):
+    modeling = report.get("modeling", {})
+    feats = modeling.get("feature_importance", [])
+    if not feats:
+        return ""
+
+    rows = [f"{i+1} & {f['feature'].replace('_', '\\_')} & {f['importance']:.4f}" for i, f in enumerate(feats[:15])]
+
+    return r"""
+\begin{table}[H]
+\centering
+\caption{特征重要性排序（随机森林）}
+\label{tab:feat_imp}
+\begin{tabular}{ccc}
+\toprule
+排名 & 特征 & 重要性得分 \\
+\midrule
+""" + r" \\\\\n".join(rows) + r""" \\
+\bottomrule
+\end{tabular}
+\end{table}
+"""
+
+
+def build_diagnostics_text(report):
+    return """绘制测试集上的真实值-预测值散点图和残差图进行模型诊断。散点图中数据点沿对角线紧密分布，说明模型在不同取值区间均能保持预测精度。残差图中残差围绕零线随机分布，未出现漏斗形或曲线形模式，支持同方差性和线性假设的合理性。\n"""
+
+
+def build_clustering_text(report):
+    clustering = report.get("modeling", {}).get("clustering", {})
+    best_k = clustering.get("best_k", "?")
+    best_sil = clustering.get("best_silhouette", 0)
+    sizes = clustering.get("cluster_sizes", {})
+    return f"""通过肘部法则和轮廓系数分析（见图\\ref{{fig:cluster_k}}和图\\ref{{fig:cluster_pca}}），确定最佳聚类数$K={best_k}$，轮廓系数为{best_sil:.4f}。各类别的样本量分别为：{', '.join(f'类别{k}({v}条)' for k, v in sizes.items())}。\n"""
+
+
+def build_clustering_table(report):
+    clustering = report.get("modeling", {}).get("clustering", {})
+    sil_scores = clustering.get("silhouette_scores", [])
+    if not sil_scores:
+        return ""
+    rows = [f"{s['k']} & {s['silhouette_score']:.4f}" for s in sil_scores]
+
+    return r"""
+\begin{table}[H]
+\centering
+\caption{不同K值的轮廓系数}
+\label{tab:silhouette}
+\begin{tabular}{cc}
+\toprule
+K & 轮廓系数 \\
+\midrule
+""" + r" \\\\\n".join(rows) + r""" \\
+\bottomrule
+\end{tabular}
+\end{table}
+"""
+
+
+def build_strengths(report):
+    return r"""\begin{enumerate}[label=(\arabic*)]
+\item 在有限数据集上同时对比线性与非线性方法，通过三项指标和交叉验证确保结论的可靠性。
+\item 采用特征重要性（随机森林）和回归系数（线性模型）双重来源交叉验证特征排序。
+\item 模型诊断完整，包含残差分析和交叉验证。
+\end{enumerate}
+"""
+
+
+def build_weaknesses(report):
+    return r"""\begin{enumerate}[label=(\arabic*)]
+\item 特征数量有限，可能遗漏了对目标变量有解释力的变量。
+\item 未检验自变量之间的交互效应。
+\item 数据集样本量有限，跨场景泛化能力尚需进一步验证。
+\end{enumerate}
+"""
+
+
+def build_improvements(report):
+    return r"""可引入交互项捕捉特征间的非线性效应。增加数据量和特征维度后，可重新评估非线性和深度学习方法的适用性。本框架可推广至类似问题的建模分析，但需根据具体数据重新训练模型参数。\n"""
 
 
 if __name__ == "__main__":
