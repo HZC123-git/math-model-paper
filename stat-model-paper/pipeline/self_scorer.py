@@ -11,6 +11,17 @@ import re
 # ============================================================
 
 SCORING_RUBRIC = {
+    "统计建模": {
+        "weights": {
+            "摘要规范性": 0.10,
+            "文献综述质量": 0.15,
+            "方法论严谨性": 0.25,
+            "实证分析深度": 0.25,
+            "内生性处理": 0.10,
+            "稳健性检验": 0.10,
+            "政策建议": 0.05,
+        },
+    },
     "国赛": {
         "weights": {
             "摘要": 0.10,
@@ -104,6 +115,49 @@ def score_dimension(text, dimension, max_score=100):
             (r'github|repository|仓库', 20, "有开源仓库"),
             (r'random_state|可复现|reproducible', 20, "可复现性"),
         ],
+        # 统计建模专用维度
+        "摘要规范性": [
+            (r'Abstract', 25, "有英文摘要"),
+            (r'p\s*[<=]\s*0\.\d+|p<0\.\d+', 25, "摘要含p值"),
+            (r'R2\s*[=＝]\s*\d|beta|系数', 20, "摘要含具体系数"),
+            (r'.{400,}', 20, "摘要≥400字"),
+        ],
+        "文献综述质量": [
+            (r'文献综述|现有研究', 20, "有文献综述章节"),
+            (r'Rosen.*1974|Black.*1999|特征价格', 15, "引用经典文献"),
+            (r'经济|学报|地理|大学|城市|统计', 15, "有中文文献"),
+            (r'.{800,}', 15, "文献综述≥800字"),
+            (r'述评|创新|不足|边际贡献', 15, "有述评与创新点"),
+        ],
+        "方法论严谨性": [
+            (r'beta|β|epsilon|ε', 15, "有基准回归方程"),
+            (r'内生性|遗漏变量|工具变量|IV|DID|固定效应|PSM', 25, "有内生性讨论"),
+            (r'稳健性|替换|缩尾|Winsorize|Bootstrap', 20, "有稳健性策略"),
+            (r'.{600,}', 15, "方法论≥600字"),
+        ],
+        "实证分析深度": [
+            (r'表\s*\d.*回归|Table\s*\d.*regression', 20, "有回归结果表"),
+            (r'\*\*\*|\*\*|\*.*p\s*<', 20, "标注显著性星号"),
+            (r'N\s*[=＝]\s*\d+|样本量|Adj-R²|F.stat', 15, "报告N/Adj-R²/F"),
+            (r'.{800,}', 15, "实证分析≥800字"),
+        ],
+        "内生性处理": [
+            (r'内生性|endogeneity', 25, "提到内生性"),
+            (r'遗漏变量|工具变量|IV|DID|断点|PSM|固定效应', 25, "提到校正方法"),
+            (r'偏误|bias|高估|低估|上偏|下偏', 20, "讨论偏误方向"),
+            (r'.{400,}', 15, "内生性讨论≥400字"),
+        ],
+        "稳健性检验": [
+            (r'稳健性|robustness', 20, "有稳健性章节"),
+            (r'替换|缩尾|Winsorize|Bootstrap|剔除', 25, "≥2种方法"),
+            (r'系数.*稳定|未.*改变|一致|robust', 15, "结论稳健"),
+            (r'.{300,}', 15, "稳健性≥300字"),
+        ],
+        "政策建议": [
+            (r'政策建议|对策建议|policy', 20, "有政策建议章节"),
+            (r'建议.*\\d|建议.*第一|建议.*第二|建议.*1', 15, "逐条列出"),
+            (r'.{200,}', 15, "≥200字"),
+        ],
     }
 
     dim_checks = checks.get(dimension, [])
@@ -122,8 +176,13 @@ def score_dimension(text, dimension, max_score=100):
 
 def score_paper(paper_path, competition_type="国赛"):
     """对论文综合打分"""
-    with open(paper_path, "r", encoding="utf-8") as f:
-        text = f.read()
+    if paper_path.endswith('.docx'):
+        from docx import Document
+        doc = Document(paper_path)
+        text = '\n'.join([p.text for p in doc.paragraphs])
+    else:
+        with open(paper_path, "r", encoding="utf-8") as f:
+            text = f.read()
 
     rubric = SCORING_RUBRIC.get(competition_type, SCORING_RUBRIC["国赛"])
     weights = rubric["weights"]
@@ -212,7 +271,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="论文自评打分")
     parser.add_argument("paper", help="论文txt路径")
     parser.add_argument("--competition", "-c", default="国算",
-                        choices=["国赛", "研究生数学建模", "美赛"])
+                        choices=["国赛", "研究生数学建模", "美赛", "统计建模"])
     parser.add_argument("--prompt", action="store_true", help="生成LLM评阅prompt")
     args = parser.parse_args()
 
